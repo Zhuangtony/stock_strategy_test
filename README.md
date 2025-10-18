@@ -61,5 +61,6 @@ python -m http.server 8000
 ## 注意事項
 
 - Yahoo Finance 介面偶爾會限制請求頻率，若短時間內多次重新模擬可能導致載入失敗，稍後再試即可。
+- 若瀏覽器顯示「無法連線至 Yahoo Finance」或「Failed to fetch」，通常與 Yahoo Finance 的跨來源限制或暫時性網路問題有關，建議改用 HTTPS 伺服器重新整理，或稍後再試。
 - 期權資料的 Delta 值以 Black-Scholes 模型重新估算，因市場資料品質不同，可能與實際報價略有差異。
 - 模擬結果僅供學術與教育用途，實際交易請自行評估風險。

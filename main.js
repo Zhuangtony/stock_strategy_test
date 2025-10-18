@@ -81,32 +81,58 @@ function dateKey(date) {
 async function fetchPriceHistory(symbol, startDate, endDate) {
   const startSeconds = Math.floor(startDate.getTime() / 1000);
   const endSeconds = Math.floor((endDate.getTime() + MS_PER_DAY) / 1000);
-  const url =
-    `https://query1.finance.yahoo.com/v7/finance/download/${encodeURIComponent(symbol)}?` +
-    `period1=${startSeconds}&period2=${endSeconds}&interval=1d&events=history&includeAdjustedClose=true`;
-  const response = await fetch(url);
+  const url = new URL(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`
+  );
+  url.searchParams.set("interval", "1d");
+  url.searchParams.set("period1", startSeconds);
+  url.searchParams.set("period2", endSeconds);
+  url.searchParams.set("includePrePost", "false");
+  url.searchParams.set("events", "div,split");
+  let response;
+  try {
+    response = await fetch(url, { cache: "no-store" });
+  } catch (error) {
+    console.error("price history request failed", error);
+    throw new Error("無法連線至 Yahoo Finance（股價資料）");
+  }
   if (!response.ok) {
     throw new Error("下載股價資料失敗");
   }
-  const text = await response.text();
-  const lines = text.trim().split(/\r?\n/);
+  const payload = await response.json();
+  const result = payload?.chart?.result?.[0];
+  const timestamps = result?.timestamp;
+  const adjClose = result?.indicators?.adjclose?.[0]?.adjclose;
+  const close = result?.indicators?.quote?.[0]?.close;
+  if (!result || !Array.isArray(timestamps)) {
+    throw new Error("股價資料格式不正確");
+  }
   const records = [];
-  for (let i = 1; i < lines.length; i += 1) {
-    const [dateStr, , , , , closeStr] = lines[i].split(",");
-    if (!dateStr || !closeStr) continue;
-    const close = Number.parseFloat(closeStr);
-    if (Number.isNaN(close)) continue;
-    const date = new Date(`${dateStr}T00:00:00Z`);
-    records.push({ date, close, key: dateStr });
+  for (let i = 0; i < timestamps.length; i += 1) {
+    const ts = timestamps[i];
+    const price = adjClose?.[i] ?? close?.[i];
+    if (!(Number.isFinite(ts) && Number.isFinite(price))) {
+      continue;
+    }
+    const date = new Date(ts * 1000);
+    const key = dateKey(date);
+    records.push({ date, close: Number(price), key });
   }
   records.sort((a, b) => a.date - b.date);
   return records;
 }
 
 async function fetchOptionMetadata(symbol) {
-  const response = await fetch(
-    `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}`
-  );
+  let response;
+  try {
+    response = await fetch(
+      `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}`,
+      { cache: "no-store" }
+    );
+  } catch (error) {
+    console.error("options metadata request failed", error);
+    throw new Error("無法連線至 Yahoo Finance（期權基本資料）");
+  }
   if (!response.ok) {
     throw new Error("無法取得期權基本資料");
   }
@@ -120,9 +146,16 @@ async function fetchOptionMetadata(symbol) {
 
 async function fetchOptionChain(symbol, expiration) {
   const timestamp = Math.floor(expiration.getTime() / 1000);
-  const response = await fetch(
-    `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?date=${timestamp}`
-  );
+  let response;
+  try {
+    response = await fetch(
+      `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?date=${timestamp}`,
+      { cache: "no-store" }
+    );
+  } catch (error) {
+    console.error("options chain request failed", error);
+    throw new Error(`無法連線至 Yahoo Finance（${formatDate(expiration)} 期權鏈）`);
+  }
   if (!response.ok) {
     throw new Error(`取得 ${formatDate(expiration)} 期權鏈失敗`);
   }
