@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Covered Call 策略模擬器</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+    <script src="main.js" defer></script>
+  </head>
+  <body>
+    <header class="page-header">
+      <h1>Covered Call 與持股策略比較</h1>
+      <p class="tagline">
+        使用 Yahoo Finance 資料模擬 sell covered call 與單純持股的資產變化，適合部署在 GitHub Pages 的純前端應用。
+      </p>
+    </header>
+
+    <main class="page-content">
+      <section class="panel">
+        <h2>參數設定</h2>
+        <form id="control-form">
+          <div class="form-group">
+            <label for="ticker">股票代碼</label>
+            <input id="ticker" name="ticker" type="text" value="AAPL" required />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="start-date">開始日期</label>
+              <input id="start-date" name="start" type="date" required />
+            </div>
+            <div class="form-group">
+              <label for="end-date">結束日期</label>
+              <input id="end-date" name="end" type="date" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="delta">目標 Delta <span id="delta-value">0.30</span></label>
+            <input id="delta" name="delta" type="range" min="0.1" max="0.8" step="0.05" value="0.3" />
+          </div>
+          <div class="form-group">
+            <label for="frequency">期權週期</label>
+            <select id="frequency" name="frequency">
+              <option value="weekly">週選</option>
+              <option value="monthly">月選</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="risk-free">無風險利率 (年化)</label>
+            <input id="risk-free" name="riskFree" type="number" step="0.001" value="0.03" />
+          </div>
+          <button type="submit" id="run-button">開始模擬</button>
+        </form>
+        <p id="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel">
+        <h2>資產價值比較</h2>
+        <canvas id="equity-chart" aria-label="Equity curve chart"></canvas>
+      </section>
+
+      <section class="panel">
+        <h2>最終資產比較</h2>
+        <table id="summary-table">
+          <thead>
+            <tr>
+              <th>策略</th>
+              <th>最終資產 (美元)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>交易事件紀錄</h2>
+        <div class="table-container">
+          <table id="events-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>現金變動</th>
+                <th>持股變動</th>
+                <th>說明</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>資料來源：Yahoo Finance。實際交易有風險，模擬結果僅供參考。</p>
+    </footer>
+  </body>
+</html>
