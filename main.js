@@ -78,28 +78,46 @@ function dateKey(date) {
   return date.toISOString().slice(0, 10);
 }
 
+async function fetchWithFallback(urls, { description, connectionErrorMessage, requestInit }) {
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, { cache: "no-store", mode: "cors", ...requestInit });
+      if (!response.ok) {
+        lastError = new Error(`${description} 回應狀態 ${response.status}`);
+        continue;
+      }
+      return await response.json();
+    } catch (error) {
+      console.warn(`${description} 來源 ${url} 失敗`, error);
+      lastError = error;
+    }
+  }
+  console.error(`${description} 取得失敗`, lastError);
+  throw new Error(connectionErrorMessage);
+}
+
 async function fetchPriceHistory(symbol, startDate, endDate) {
   const startSeconds = Math.floor(startDate.getTime() / 1000);
   const endSeconds = Math.floor((endDate.getTime() + MS_PER_DAY) / 1000);
-  const url = new URL(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`
+  const urlParams = new URLSearchParams({
+    interval: "1d",
+    period1: String(startSeconds),
+    period2: String(endSeconds),
+    includePrePost: "false",
+    events: "div,split",
+  });
+  const baseUrls = [
+    "https://query1.finance.yahoo.com/v8/finance/chart/",
+    "https://query2.finance.yahoo.com/v8/finance/chart/",
+  ];
+  const payload = await fetchWithFallback(
+    baseUrls.map((base) => `${base}${encodeURIComponent(symbol)}?${urlParams.toString()}`),
+    {
+      description: "股價資料",
+      connectionErrorMessage: "無法連線至 Yahoo Finance（股價資料）",
+    }
   );
-  url.searchParams.set("interval", "1d");
-  url.searchParams.set("period1", startSeconds);
-  url.searchParams.set("period2", endSeconds);
-  url.searchParams.set("includePrePost", "false");
-  url.searchParams.set("events", "div,split");
-  let response;
-  try {
-    response = await fetch(url, { cache: "no-store" });
-  } catch (error) {
-    console.error("price history request failed", error);
-    throw new Error("無法連線至 Yahoo Finance（股價資料）");
-  }
-  if (!response.ok) {
-    throw new Error("下載股價資料失敗");
-  }
-  const payload = await response.json();
   const result = payload?.chart?.result?.[0];
   const timestamps = result?.timestamp;
   const adjClose = result?.indicators?.adjclose?.[0]?.adjclose;
@@ -123,20 +141,17 @@ async function fetchPriceHistory(symbol, startDate, endDate) {
 }
 
 async function fetchOptionMetadata(symbol) {
-  let response;
-  try {
-    response = await fetch(
-      `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}`,
-      { cache: "no-store" }
-    );
-  } catch (error) {
-    console.error("options metadata request failed", error);
-    throw new Error("無法連線至 Yahoo Finance（期權基本資料）");
-  }
-  if (!response.ok) {
-    throw new Error("無法取得期權基本資料");
-  }
-  const payload = await response.json();
+  const urlTemplates = [
+    "https://query2.finance.yahoo.com/v7/finance/options/",
+    "https://query1.finance.yahoo.com/v7/finance/options/",
+  ];
+  const payload = await fetchWithFallback(
+    urlTemplates.map((base) => `${base}${encodeURIComponent(symbol)}`),
+    {
+      description: "期權基本資料",
+      connectionErrorMessage: "無法連線至 Yahoo Finance（期權基本資料）",
+    }
+  );
   const optionData = payload?.optionChain?.result?.[0];
   if (!optionData || !optionData.expirationDates) {
     throw new Error("期權資料格式不正確");
@@ -146,20 +161,19 @@ async function fetchOptionMetadata(symbol) {
 
 async function fetchOptionChain(symbol, expiration) {
   const timestamp = Math.floor(expiration.getTime() / 1000);
-  let response;
-  try {
-    response = await fetch(
-      `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?date=${timestamp}`,
-      { cache: "no-store" }
-    );
-  } catch (error) {
-    console.error("options chain request failed", error);
-    throw new Error(`無法連線至 Yahoo Finance（${formatDate(expiration)} 期權鏈）`);
-  }
-  if (!response.ok) {
-    throw new Error(`取得 ${formatDate(expiration)} 期權鏈失敗`);
-  }
-  const payload = await response.json();
+  const urlTemplates = [
+    "https://query2.finance.yahoo.com/v7/finance/options/",
+    "https://query1.finance.yahoo.com/v7/finance/options/",
+  ];
+  const payload = await fetchWithFallback(
+    urlTemplates.map(
+      (base) => `${base}${encodeURIComponent(symbol)}?date=${timestamp}`
+    ),
+    {
+      description: `${formatDate(expiration)} 期權鏈`,
+      connectionErrorMessage: `無法連線至 Yahoo Finance（${formatDate(expiration)} 期權鏈）`,
+    }
+  );
   const optionData = payload?.optionChain?.result?.[0];
   return optionData ? optionData.calls ?? [] : [];
 }
